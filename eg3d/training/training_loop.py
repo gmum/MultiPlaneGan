@@ -129,6 +129,8 @@ def training_loop(
     # Initialize.
     start_time = time.time()
     device = torch.device('cuda', rank)
+    torch.cuda.set_device(device)
+    torch.cuda.empty_cache()
     np.random.seed(random_seed * num_gpus + rank)
     torch.manual_seed(random_seed * num_gpus + rank)
     torch.backends.cudnn.benchmark = cudnn_benchmark    # Improves training speed.
@@ -170,8 +172,8 @@ def training_loop(
 
     # Print network summary tables.
     if rank == 0:
-        z = torch.empty([batch_gpu, G.z_dim], device=device)
-        c = torch.empty([batch_gpu, G.c_dim], device=device)
+        z = torch.empty([1, G.z_dim], device=device)
+        c = torch.empty([1, G.c_dim], device=device)
         img = misc.print_module_summary(G, [z, c])
         misc.print_module_summary(D, [img, c])
 
@@ -358,6 +360,40 @@ def training_loop(
 
         # Save image snapshot.
         if (rank == 0) and (image_snapshot_ticks is not None) and (done or cur_tick % image_snapshot_ticks == 0):
+            ws = G_ema.mapping(grid_z[0][:1], grid_c[0][:1])
+            planes = G_ema.backbone.synthesis(ws, noise_mode='const')
+            planes = planes.view(32, 3, planes.shape[-2], planes.shape[-1]).cpu()
+
+            grid = []
+            grid2 = []
+            for plane in planes:
+                plane2 = plane
+                plane2 -= plane2.min()
+                plane2 = plane2 / plane2.max() * 255
+                plane = torch.nn.functional.sigmoid(plane) * 255
+                grid.append(plane)
+                grid2.append(plane2)
+
+            top_row = torch.cat(grid[:16], dim=2)
+            bottom_row = torch.cat(grid[16:], dim=2)
+            grid = torch.cat((top_row,
+                              torch.zeros(3, 8, top_row.shape[2]),
+                              bottom_row), dim=1)
+
+            top_row2 = torch.cat(grid2[:16], dim=2)
+            bottom_row2 = torch.cat(grid2[16:], dim=2)
+            grid2 = torch.cat((top_row2,
+                               torch.zeros(3, 8, top_row.shape[2]),
+                               bottom_row2), dim=1)
+
+            # PIL.Image.fromarray(np.asarray(grid, dtype=np.uint8), 'RGB').save(os.path.join(run_dir, f'planes{cur_nimg//1000:06d}.png'))
+            PIL.Image.fromarray(np.asarray(grid.transpose(0, 2), dtype=np.uint8), 'RGB').save(
+                os.path.join(run_dir, f'planes{cur_nimg // 1000:06d}_transposed.png'))
+
+            # PIL.Image.fromarray(np.asarray(grid2, dtype=np.uint8), 'RGB').save(os.path.join(run_dir, f'planes_min_max{cur_nimg//1000:06d}.png'))
+            PIL.Image.fromarray(np.asarray(grid2.transpose(0, 2), dtype=np.uint8), 'RGB').save(
+                os.path.join(run_dir, f'planes_min_max{cur_nimg // 1000:06d}_transposed.png'))
+
             out = [G_ema(z=z, c=c, noise_mode='const') for z, c in zip(grid_z, grid_c)]
             images = torch.cat([o['image'].cpu() for o in out]).numpy()
             images_raw = torch.cat([o['image_raw'].cpu() for o in out]).numpy()
