@@ -421,9 +421,26 @@ class ImportanceRenderer(torch.nn.Module):
         return rgb_final, depth_final, weights.sum(2)
 
     def run_model(self, planes, decoder, sample_coordinates, sample_directions, options):
-        sampled_features = sample_from_planes(self.plane_axes, planes, sample_coordinates, padding_mode='zeros', box_warp=options['box_warp'])
+        outs = []
+        nerfs = []
+        # print("run_model shapes", planes.shape, sample_coordinates.shape)
+        # [8, 3, 32, 256, 256]) ([8, 2000, 3])
+        for plane, sample_coordinates_ in zip(planes, sample_coordinates):
+            poses = [pose_spherical(theta, phi, -1.307) for phi, theta in fibonacci_sphere(32)]
+            image_plane = ImagePlanes(focal=torch.Tensor([10.0]),
+                                      poses=np.stack(poses),
+                                      images=plane.view(32, 3, plane.shape[-2], plane.shape[-1]))
+            plane_nerf = MultiImageNeRF(image_plane=image_plane)
+            nerfs.append(plane_nerf)
+            # self.plane_axes = self.plane_axes.to(ray_origins.device)
+            out = plane_nerf(sample_coordinates_.squeeze(0), sample_directions.squeeze(0), self.render_network)
+            outs.append(out)
 
-        out = decoder(sampled_features, sample_directions)
+        out = {k: torch.stack([out[k] for out in outs]) for k in outs[0].keys()}
+        # batch_size = planes.shape[0]
+        # depths_coarse = torch.cat(depths, dim=0)
+        #
+        # out = decoder(sampled_features, sample_directions)
         return out
 
     def sort_samples(self, all_depths, all_colors, all_densities):

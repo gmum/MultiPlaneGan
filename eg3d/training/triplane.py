@@ -7,7 +7,7 @@
 # disclosure or distribution of this material and related documentation
 # without an express license agreement from NVIDIA CORPORATION or
 # its affiliates is strictly prohibited.
-import numpy as np
+
 import torch
 from torch_utils import persistence
 from training.networks_stylegan2 import Generator as StyleGAN2Backbone
@@ -77,12 +77,6 @@ class TriPlaneGenerator(torch.nn.Module):
         if cache_backbone:
             self._last_planes = planes
 
-        # Reshape output into three 32-channel planes
-        # planes = planes.view(len(planes), 3, 32, planes.shape[-2], planes.shape[-1])
-        # planes_img = planes.view(len(planes), 32, 3, planes.shape[-2], planes.shape[-1])
-        # planes_img = torch.stack([planes_img[i, np.random.randint(0, 32)] for i in range(planes.shape[0])])
-        # planes_img = planes_img.permute(0, 1, 3, 2)
-
         # Perform volume rendering
         feature_samples, depth_samples, weights_samples = self.renderer(planes, self.decoder, ray_origins,
                                                                         ray_directions,
@@ -110,6 +104,7 @@ class TriPlaneGenerator(torch.nn.Module):
 
     def sample(self, coordinates, directions, z, c, truncation_psi=1, truncation_cutoff=None, update_emas=False,
                **synthesis_kwargs):
+        raise NotImplementedError()
         # Compute RGB features, density for arbitrary 3D coordinates. Mostly used for extracting shapes.
         ws = self.mapping(z, c, truncation_psi=truncation_psi, truncation_cutoff=truncation_cutoff,
                           update_emas=update_emas)
