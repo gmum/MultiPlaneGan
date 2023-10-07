@@ -128,87 +128,6 @@ def sample_from_3dgrid(grid, coordinates):
     return sampled_features
 
 
-class RenderNetwork(torch.nn.Module):
-    def __init__(
-            self,
-            input_size,
-            dir_count
-    ):
-        super().__init__()
-        self.input_size = 3 * input_size + input_size * 2
-        self.layers_main = torch.nn.Sequential(
-            torch.nn.Linear(self.input_size, 64),
-            torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-        )
-        # decoder_lr_mul
-        self.net = torch.nn.Sequential(
-            torch.nn.Linear(self.input_size, 64),
-            torch.nn.Softplus(),
-            torch.nn.Linear(64, 32 + 1),
-
-        )
-
-        self.layers_main_2 = torch.nn.Sequential(
-            torch.nn.Linear(64 + self.input_size, 64),
-            torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-        )
-
-        self.layers_sigma = torch.nn.Sequential(
-            torch.nn.Linear(64 + self.input_size, 64),  # dodane wejscie tutaj moze cos pomoze
-            torch.nn.ReLU(),
-            torch.nn.Linear(64, 1)
-        )
-
-        self.layers_rgb = torch.nn.Sequential(
-            torch.nn.Linear(64 + self.input_size + dir_count, 64),
-            torch.nn.ReLU(),
-            # torch.nn.Linear(256, 256),
-            # torch.nn.ReLU(),
-            torch.nn.Linear(64, 32),
-        )
-
-    def forward(self, sampled_features, ray_directions):
-        # Aggregate features
-        # sampled_features = sampled_features.mean(1)
-        x = sampled_features
-
-        # N, M, C = x.shape
-        # x = x.view(N * M, C)
-
-        x = self.net(x)
-        # x = x.view(N, M, -1)
-        rgb = torch.sigmoid(x[..., 1:]) * (1 + 2 * 0.001) - 0.001  # Uses sigmoid clamping from MipNeRF
-        sigma = x[..., 0:1]
-        return {'rgb': rgb, 'sigma': sigma}
-
-    # def forward(self, triplane_code, dirs):
-    #     x = self.layers_main(triplane_code)
-    #     x1 = torch.concat([x, triplane_code], dim=1)
-    #
-    #     x = self.layers_main_2(x1)
-    #     xs = torch.concat([x, triplane_code], dim=1)
-    #
-    #     sigma = self.layers_sigma(xs)
-    #     x = torch.concat([x, triplane_code, dirs], dim=1)
-    #     rgb = self.layers_rgb(x)
-    #     return {'rgb': rgb,
-    #             'sigma': sigma}
-
-
 class ImagePlanes(torch.nn.Module):
 
     def __init__(self, focal, poses, images, count=np.inf, device='cuda'):
@@ -282,16 +201,16 @@ class ImagePlanes(torch.nn.Module):
 
 class MultiImageNeRF(torch.nn.Module):
 
-    def __init__(self, image_plane):
+    def __init__(self, image_plane, decoder):
         super(MultiImageNeRF, self).__init__()
         self.image_plane = image_plane
-
+        self.decoder = decoder
         # self.input_ch_views = dir_count
 
-    def forward(self, input_pts, input_views, renderer_network):
+    def forward(self, input_pts, input_views):
         # input_pts, input_views = torch.split(x, [3, self.input_ch_views], dim=-1)
         x = self.image_plane(input_pts)
-        return renderer_network(x, input_views)
+        return self.decoder(x, input_views)
 
 import math
 
@@ -321,13 +240,11 @@ def fibonacci_sphere(samples=1000):
 
 
 class ImportanceRenderer(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, decoder):
         super().__init__()
         self.ray_marcher = MipRayMarcher2()
         self.plane_axes = generate_planes()
-        count = 32
-        dir_count = 3
-        self.render_network = RenderNetwork(count, dir_count)
+        self.decoder = decoder
 
     def forward(self, planes, decoder, ray_origins, ray_directions, rendering_options):
         outs = []
@@ -342,7 +259,7 @@ class ImportanceRenderer(torch.nn.Module):
             image_plane = ImagePlanes(focal=torch.Tensor([10.0]),
                         poses=np.stack(poses),
                         images=plane.view(32, 3, plane.shape[-2], plane.shape[-1]))
-            plane_nerf = MultiImageNeRF(image_plane=image_plane)
+            plane_nerf = MultiImageNeRF(image_plane=image_plane, decoder=decoder)
             nerfs.append(plane_nerf)
             self.plane_axes = self.plane_axes.to(ray_origins.device)
 
@@ -363,7 +280,7 @@ class ImportanceRenderer(torch.nn.Module):
             sample_coordinates = (origin.unsqueeze(-2) + depths_coarse * direction.unsqueeze(-2)).reshape(batch_size, -1, 3)
             sample_directions = direction.unsqueeze(-2).expand(-1, -1, samples_per_ray, -1).reshape(batch_size, -1, 3)
 
-            out = plane_nerf(sample_coordinates.squeeze(0), sample_directions.squeeze(0), self.render_network)
+            out = plane_nerf(sample_coordinates.squeeze(0), sample_directions.squeeze(0))
             outs.append(out)
 
         out = {k: torch.stack([out[k] for out in outs]) for k in outs[0].keys()}
@@ -396,7 +313,7 @@ class ImportanceRenderer(torch.nn.Module):
                 sample_directions = directions.unsqueeze(-2).expand(-1, -1, N_importance, -1).reshape(1, -1, 3)
                 sample_coordinates = (origins.unsqueeze(-2) + depths_fine * directions.unsqueeze(-2)).reshape(1, -1, 3)
 
-                out = plane_nerf(sample_coordinates.squeeze(0), sample_directions.squeeze(0), self.render_network)
+                out = plane_nerf(sample_coordinates.squeeze(0), sample_directions.squeeze(0))
                 outs.append(out)
                 depths_.append(depths_fine)
 
@@ -430,17 +347,12 @@ class ImportanceRenderer(torch.nn.Module):
             image_plane = ImagePlanes(focal=torch.Tensor([10.0]),
                                       poses=np.stack(poses),
                                       images=plane.view(32, 3, plane.shape[-2], plane.shape[-1]))
-            plane_nerf = MultiImageNeRF(image_plane=image_plane)
+            plane_nerf = MultiImageNeRF(image_plane=image_plane, decoder=decoder)
             nerfs.append(plane_nerf)
-            # self.plane_axes = self.plane_axes.to(ray_origins.device)
-            out = plane_nerf(sample_coordinates_.squeeze(0), sample_directions.squeeze(0), self.render_network)
+            out = plane_nerf(sample_coordinates_.squeeze(0), None)
             outs.append(out)
 
         out = {k: torch.stack([out[k] for out in outs]) for k in outs[0].keys()}
-        # batch_size = planes.shape[0]
-        # depths_coarse = torch.cat(depths, dim=0)
-        #
-        # out = decoder(sampled_features, sample_directions)
         return out
 
     def sort_samples(self, all_depths, all_colors, all_densities):

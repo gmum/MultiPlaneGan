@@ -36,15 +36,15 @@ class TriPlaneGenerator(torch.nn.Module):
         self.w_dim = w_dim
         self.img_resolution = img_resolution
         self.img_channels = img_channels
-        self.renderer = ImportanceRenderer()
         self.ray_sampler = RaySampler()
         self.backbone = StyleGAN2Backbone(z_dim, c_dim, w_dim, img_resolution=256, img_channels=32 * 3,
                                           mapping_kwargs=mapping_kwargs, **synthesis_kwargs)
         self.superresolution = dnnlib.util.construct_class_by_name(
             class_name=rendering_kwargs['superresolution_module'], channels=32, img_resolution=img_resolution,
             sr_num_fp16_res=sr_num_fp16_res, sr_antialias=rendering_kwargs['sr_antialias'], **sr_kwargs)
-        self.decoder = OSGDecoder(32, {'decoder_lr_mul': rendering_kwargs.get('decoder_lr_mul', 1),
+        self.decoder = OSGDecoder(32 * 5, {'decoder_lr_mul': rendering_kwargs.get('decoder_lr_mul', 1),
                                        'decoder_output_dim': 32})
+        self.renderer = ImportanceRenderer(self.decoder)
         self.neural_rendering_resolution = 64
         self.rendering_kwargs = rendering_kwargs
 
@@ -146,14 +146,14 @@ class OSGDecoder(torch.nn.Module):
 
     def forward(self, sampled_features, ray_directions):
         # Aggregate features
-        sampled_features = sampled_features.mean(1)
+        # sampled_features = sampled_features.mean(1)
         x = sampled_features
 
-        N, M, C = x.shape
-        x = x.view(N * M, C)
+        # N, M, C = x.shape
+        # x = x.view(N * M, C)
 
         x = self.net(x)
-        x = x.view(N, M, -1)
+        # x = x.view(N, M, -1)
         rgb = torch.sigmoid(x[..., 1:]) * (1 + 2 * 0.001) - 0.001  # Uses sigmoid clamping from MipNeRF
         sigma = x[..., 0:1]
         return {'rgb': rgb, 'sigma': sigma}
