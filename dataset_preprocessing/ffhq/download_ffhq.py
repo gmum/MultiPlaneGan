@@ -34,6 +34,10 @@ PIL.ImageFile.LOAD_TRUNCATED_IMAGES = True # avoid "Decompressed Data Too Large"
 
 json_spec = dict(file_url='https://drive.google.com/uc?id=16N0RV4fHI6joBuKbQAoG34V_cQk7vxSA', file_path='ffhq-dataset-v2.json', file_size=267793842, file_md5='425ae20f06a4da1d4dc0f46d40ba5fd6')
 
+headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36"  # NOQA
+    }
+
 tfrecords_specs = [
     dict(file_url='https://drive.google.com/uc?id=1LnhoytWihRRJ7CfhLQ76F8YxwxRDlZN3', file_path='tfrecords/ffhq/ffhq-r02.tfrecords', file_size=6860000,      file_md5='63e062160f1ef9079d4f51206a95ba39'),
     dict(file_url='https://drive.google.com/uc?id=1LWeKZGZ_x2rNlTenqsaTk8s7Cpadzjbh', file_path='tfrecords/ffhq/ffhq-r03.tfrecords', file_size=17290000,     file_md5='54fb32a11ebaf1b86807cc0446dd4ec5'),
@@ -59,6 +63,8 @@ license_specs = {
 def download_file(session, file_spec, stats, chunk_size=128, num_attempts=10):
     file_path = file_spec['file_path']
     file_url = file_spec['file_url']
+    file_url = file_url.split('?')[0] + '?export=download&confirm=no_antivirus&' + file_url.split('?')[1]
+    # print(file_url)
     file_dir = os.path.dirname(file_path)
     tmp_path = file_path + '.tmp.' + uuid.uuid4().hex
     if file_dir:
@@ -69,7 +75,7 @@ def download_file(session, file_spec, stats, chunk_size=128, num_attempts=10):
         try:
             # Download.
             data_md5 = hashlib.md5()
-            with session.get(file_url, stream=True) as res:
+            with session.get(file_url, headers=headers,  stream=True) as res:
                 res.raise_for_status()
                 with open(tmp_path, 'wb') as f:
                     for chunk in res.iter_content(chunk_size=chunk_size<<10):
@@ -153,7 +159,8 @@ def format_time(seconds):
 #----------------------------------------------------------------------------
 
 def download_files(file_specs, num_threads=32, status_delay=0.2, timing_window=50, **download_kwargs):
-
+    num_threads = 1
+    # status_delay = 1.0
     # Determine which files to download.
     done_specs = {spec['file_path']: spec for spec in file_specs if os.path.isfile(spec['file_path'])}
     missing_specs = [spec for spec in file_specs if spec['file_path'] not in done_specs]
