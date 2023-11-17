@@ -49,7 +49,7 @@ def pose_spherical(theta, phi, radius):
     c2w = trans_t(radius)
     c2w = rot_phi(phi/180.*np.pi) @ c2w
     c2w = rot_theta(theta/180.*np.pi) @ c2w
-    eta = 90
+    eta = 180
     c2w = rot_eta(eta / 180. * np.pi) @ c2w
     c2w = torch.Tensor(np.array([[-1,0,0,0],
                                  [0,0,1,0],
@@ -218,6 +218,13 @@ def cart2sph(x,y,z):
     XsqPlusYsq = x**2 + y**2
     elev = math.atan2(z,math.sqrt(XsqPlusYsq))     # theta
     az = math.atan2(y,x)                           # phi
+    elev = elev / np.pi * 180
+    if elev < 0:
+        elev = 360 + elev
+    az = az / np.pi * 180
+    if az < 0:
+        az = 360 + az
+
     return elev, az
 
 def fibonacci_sphere(samples=1000):

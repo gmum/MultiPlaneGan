@@ -123,6 +123,13 @@ def kid10k_full(opts):
     kid = kernel_inception_distance.compute_kid(opts, max_real=1000000, num_gen=10000, num_subsets=100, max_subset_size=1000)
     return dict(kid10k_full=kid)
 
+
+@register_metric
+def kid5k_full(opts):
+    opts.dataset_kwargs.update(max_size=None, xflip=False)
+    kid = kernel_inception_distance.compute_kid(opts, max_real=1000000, num_gen=1000, num_subsets=100, max_subset_size=5000)
+    return dict(kid5k_full=kid)
+
 @register_metric
 def kid1k_full(opts):
     opts.dataset_kwargs.update(max_size=None, xflip=False)
