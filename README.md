@@ -14,6 +14,3 @@ conda activate eg3d
 
 Follow instructions from [EG3D](https://github.com/NVlabs/eg3d). 
 The only differens is that we set the set the `gamma` parameter to 1.0.
-
-
-### Bibtex
