@@ -5,9 +5,9 @@ This repo contains implementation of GAN version of ["MultiPlaneNeRF: Neural Rad
 ### Installation
 To install, run the following commands:
 ```
-cd eg3d
+cd multiplanegan
 conda env create -f environment.yml
-conda activate eg3d
+conda activate multiplanegan
 ```
 
 ### Training and Datasets

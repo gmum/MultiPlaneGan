@@ -22,7 +22,7 @@ from tqdm import tqdm
 import argparse
 import torch
 import sys
-sys.path.append('../../eg3d')
+sys.path.append('../../multiplanegan')
 from camera_utils import create_cam2world_matrix
 
 COMPRESS_LEVEL=0

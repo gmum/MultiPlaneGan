@@ -72,6 +72,6 @@ gdown.download('https://drive.google.com/uc?id=14mzYD1DxUjh7BGgeWKgXtLHWwvr-he1Z
 #--------------------------------------------------------------------------------------------------------#
 
 print("Creating dataset zip...")
-cmd = f"python {os.path.join(dir_path, '../../eg3d', 'dataset_tool.py')}"
+cmd = f"python {os.path.join(dir_path, '../../multiplanegan', 'dataset_tool.py')}"
 cmd += f" --source=final_crops --dest FFHQ_512.zip --resolution 512x512"
 subprocess.run([cmd], shell=True, check=True)

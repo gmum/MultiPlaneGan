@@ -28,7 +28,7 @@ eg3d_root = os.path.join(os.path.dirname(os.path.realpath(__file__)), '..', '..'
 input_dataset_path = os.path.realpath(args.inzip)
 output_dataset_path = os.path.realpath(args.outzip)
 
-dataset_tool_path = os.path.join(eg3d_root, 'eg3d', 'dataset_tool.py')
+dataset_tool_path = os.path.join(eg3d_root, 'multiplanegan', 'dataset_tool.py')
 mirror_tool_path = os.path.join(eg3d_root, 'dataset_preprocessing', 'mirror_dataset.py')
 
 # Attempt to import dataset_tool.py and mirror_dataset.py to fail-fast on errors (ie importing python modules) before any processing
